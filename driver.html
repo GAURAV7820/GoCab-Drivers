@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Driver Location Sharing</title>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.8.0/firebase-app.js";
+    import { getFirestore, doc, setDoc, updateDoc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.8.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDgFhEKS9e82L-mQ5dL5L7NI9GWzwdUHrk",
+      authDomain: "techpath-cd1de.firebaseapp.com",
+      projectId: "techpath-cd1de",
+      storageBucket: "techpath-cd1de.firebasestorage.app",
+      messagingSenderId: "808810812289",
+      appId: "1:808810812289:web:dcaddeccf7e72513830e80",
+      measurementId: "G-9X1E9MV5MD"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    let watchId = null; // to keep track of geolocation watcher
+
+    window.addEventListener('DOMContentLoaded', () => {
+      const statusEl = document.getElementById('status');
+      const startBtn = document.getElementById('startBtn');
+      const stopBtn = document.getElementById('stopBtn');
+      const nameInput = document.getElementById('driverName');
+
+      startBtn.addEventListener('click', () => {
+        const driverName = nameInput.value.trim();
+        if (!driverName) {
+          alert('Please enter driver name');
+          return;
+        }
+
+        if (!navigator.geolocation) {
+          statusEl.textContent = 'Geolocation not supported';
+          return;
+        }
+
+        statusEl.textContent = 'Sharing location...';
+
+        watchId = navigator.geolocation.watchPosition(
+          async (pos) => {
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+            statusEl.textContent = `Lat: ${lat.toFixed(5)}, Lng: ${lng.toFixed(5)}`;
+
+            try {
+              const driverRef = doc(db, "drivers", driverName);
+              const snap = await getDoc(driverRef);
+              if (snap.exists()) {
+                await updateDoc(driverRef, { latitude: lat, longitude: lng });
+              } else {
+                await setDoc(driverRef, {
+                  latitude: lat,
+                  longitude: lng,
+                  isAllocated: false
+                });
+              }
+            } catch (err) {
+              statusEl.textContent = 'Error: ' + err.message;
+            }
+          },
+          (err) => {
+            statusEl.textContent = `Location Error: ${err.message}`;
+          },
+          {
+            enableHighAccuracy: true,
+            maximumAge: 30000,
+            timeout: 27000,
+          }
+        );
+      });
+
+      stopBtn.addEventListener('click', async () => {
+        const driverName = nameInput.value.trim();
+        if (!driverName) {
+          alert('Please enter driver name to stop');
+          return;
+        }
+
+        if (watchId !== null) {
+          navigator.geolocation.clearWatch(watchId);
+          watchId = null;
+        }
+
+        try {
+          await deleteDoc(doc(db, "drivers", driverName));
+          statusEl.textContent = "Location sharing stopped and data removed.";
+        } catch (err) {
+          statusEl.textContent = 'Error removing data: ' + err.message;
+        }
+      });
+    });
+  </script>
+</head>
+<body>
+  <h2>Driver Location Sharing</h2>
+  <input id="driverName" placeholder="Enter driver name" />
+  <button id="startBtn">Start Sharing Location</button>
+  <button id="stopBtn">Stop Sharing Location</button>
+  <p id="status">Not sharing</p>
+</body>
+</html>
